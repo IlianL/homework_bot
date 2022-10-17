@@ -119,9 +119,6 @@ def check_tokens():
     """Проверяем обязательные токены."""
     no_token_msg = ('Отсутствует обязательная переменная окружения:')
     flag = True
-    # Мне кажется это неправильным, но я сделал это для теста
-    # Например так: TELEGRAM_CHAT_ID=
-    # Его тип будет str и проверку на None или isinstance делать некорректно
     if PRACTICUM_TOKEN is None:
         flag = False
         logger.critical(f'{no_token_msg} PRACTICUM_TOKEN')
