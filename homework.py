@@ -17,6 +17,8 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+# А в таком случае нужно настраивать общий логер?
+# Ведь ниже мы создаём логер для проекта
 logging.basicConfig(
     level=logging.DEBUG,
     filename='main.log',
@@ -42,7 +44,7 @@ HOMEWORK_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.',
-    'none': 'Домашних работ на проверке нет'
+    'missing': 'Работы на проверку нет. Грусть :('
 }
 
 
@@ -60,58 +62,73 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
-        homework_statuses = requests.get(
+        response = requests.get(
             ENDPOINT, headers=HEADERS, params=params
         )
-        response = homework_statuses.json()
+        if response.status_code != 200:
+            error_msg = (
+                f'Эндпоинт {ENDPOINT} недоступен.'
+                f'Код ошибки: {response.status_code}')
+            logger.error(error_msg)
+            raise exceptions.TheAnswerIsNot200Error(error_msg)
+        response = response.json()
+
         return response
     except Exception as error:
-        error_msg = (f'Ошибка при запросе, недоступность эндпоинта: {error}')
+        error_msg = (f'Ошибка при запросе, эндпоинт недоступен: {error}')
         logger.error(error_msg)
         raise exceptions.RequestExceptionError(error)
 
 
 def check_response(response):
-    """Проверяем response на корректность."""
-    empty_response = {'homework_name': 'There is no homework to check',
-                      'status': 'none'}
-    if not isinstance(response, dict):
-        error_msg = ('response не является словарём')
-        logger.error(error_msg)
-        raise TypeError(error_msg)
-    if response.get('homeworks') is None:
-        logger.error('Ошибка ключа, ожидаем ключ homeworks'
-                     'в словаре response')
-        raise exceptions.EmptyDictionaryError()
-    if len(response.get('homeworks')) == 0:
-        return empty_response
-    return response.get('homeworks')[0]
+    """Функция проверки корректности ответа ЯП."""
+    try:
+        timestamp = response['current_date']
+    except KeyError:
+        logger.error(
+            'Ключ current_date отсутствует'
+        )
+    try:
+        homeworks = response['homeworks']
+    except KeyError:
+        logger.error(
+            'Ключ homeworks отсутствует'
+        )
+    if isinstance(timestamp, int) and isinstance(homeworks, list):
+        return homeworks
+    else:
+        raise Exception
 
 
 def parse_status(homework):
     """Получаем статус домашней работы."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    verdict = HOMEWORK_STATUSES[homework_status]
-
-    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    if homework_name is None:
+        raise KeyError()
+    if homework_status is None:
+        raise KeyError()
+    if homework_status in HOMEWORK_STATUSES:
+        verdict = HOMEWORK_STATUSES[homework_status]
+        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    else:
+        raise KeyError()
 
 
 def check_tokens():
     """Проверяем обязательные токены."""
     no_token_msg = ('Отсутствует обязательная переменная окружения:')
     flag = True
-    # Это конечно выглядит смешно, но если поле с токеном пустое
+    # Мне кажется это неправильным, но я сделал это для теста
     # Например так: TELEGRAM_CHAT_ID=
     # Его тип будет str и проверку на None или isinstance делать некорректно
-    # Длина токенов ведь может быть разной? или обычно длину хардкодят?
-    if len(PRACTICUM_TOKEN) < 1:
+    if PRACTICUM_TOKEN is None:
         flag = False
         logger.critical(f'{no_token_msg} PRACTICUM_TOKEN')
-    if len(TELEGRAM_TOKEN) < 1:
+    if TELEGRAM_TOKEN is None:
         flag = False
         logger.critical(f'{no_token_msg} TELEGRAM_TOKEN')
-    if len(TELEGRAM_CHAT_ID) < 1:
+    if TELEGRAM_CHAT_ID is None:
         flag = False
         logger.critical(f'{no_token_msg} TELEGRAM_CHAT_ID')
     return flag
@@ -129,6 +146,12 @@ def main():
             try:
                 response = get_api_answer(current_timestamp)
                 homework = check_response(response)
+                if len(homework) != 0:
+                    homework = homework[0]
+                else:
+                    homework = {'homework_name': 'There is no homework yet',
+                                'status': 'missing'
+                                }
                 hw_name = homework.get('homework_name')
                 hw_status = homework.get('status')
                 if prev_hw != hw_name and prev_status != hw_status:
@@ -136,7 +159,6 @@ def main():
                     send_message(bot, message)
                     prev_hw = homework.get('homework_name')
                     prev_status = homework.get('status')
-
                 current_timestamp = int(time.time())
                 time.sleep(RETRY_TIME)
 
