@@ -23,6 +23,11 @@ class UnknownDictKeyError(Exception):
     pass
 
 
-class ShitError(Exception):
-    """Я ненавижу эти тесты."""
+class RequestIsNotDictionaryError(Exception):
+    """Ошибка отправления сообщения в телеграм."""
+    pass
+
+
+class MandatoryTokenError(Exception):
+    """Обязательные переменные окружения не были введены."""
     pass
