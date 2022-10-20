@@ -37,6 +37,7 @@ logger.addHandler(handler)
 
 
 RETRY_TIME = 10 * 60
+
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -50,11 +51,10 @@ HOMEWORK_STATUSES = {
 
 def send_message(bot, message):
     """Отправка сообщения в телеграм."""
-    logger.info(f'{send_message.__name__} начинает работу')
+    logger.info('Начинаем отправлять сообщение')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except TelegramError as tg_error:
-        logger.error(f'Сообщнеие не отправлено: {tg_error}')
         raise tg_error()
     else:
         logger.info(f'Успешно отправили сообщение {message}')
@@ -62,7 +62,7 @@ def send_message(bot, message):
 
 def get_api_answer(current_timestamp):
     """Запрос к сервису."""
-    logger.info(f'{get_api_answer.__name__} начинает работу')
+    logger.info('Делаем запрос к сервису')
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     requests_params = {
@@ -78,64 +78,48 @@ def get_api_answer(current_timestamp):
                          f'Статус ответа: {response.status_code}.\n'
                          f'Параметры запроса: {requests_params}.\n')
 
-            logger.error(error_msg)
             raise exceptions.TheAnswerIsNot200Error(error_msg)
         response = response.json()
         return response
     except Exception as error:
-        error_msg = (f'Ошибка при запросе, эндпоинт недоступен: {error}\n'
-                     f'Параметры запроса: {requests_params}.\n')
-        logger.error(error_msg)
         raise exceptions.RequestExceptionError(error)
 
 
 def check_response(response):
     """Функция проверки корректности ответа ЯП."""
-    logger.info(f'{check_response.__name__} начинает работу')
+    logger.info('Проверка данных')
     if not isinstance(response, dict):
         error_msg = f'response должен быть словарём, сейчас - {type(response)}'
-        logger.error(error_msg)
         raise TypeError(error_msg)
-    try:
-        timestamp = response['current_date']
-    except KeyError:
+    if 'current_date' not in response:
         error_msg = ('Ключ current_date отсутствует.\n'
                      f'Ответ: {response}.\n')
-        logger.error(error_msg)
         raise KeyError(error_msg)
-    try:
-        homeworks = response['homeworks']
-    except KeyError:
+    if 'homeworks' not in response:
         error_msg = ('Ключ homeworks отсутствует.\n'
                      f'Ответ: {response}.\n')
-        logger.error(error_msg)
         raise KeyError(error_msg)
+    homeworks = response['homeworks']
+
     if not isinstance(homeworks, list):
         error_msg = (f'Домашние работы должны быть списком, '
                      f'сейчас - {type(homeworks)}')
-        logger.error(error_msg)
         raise KeyError(error_msg)
-    if not isinstance(timestamp, int):
-        error_msg = ('Текущее время должно быть числом, '
-                     f'сейчас - {type(timestamp)}')
-        logger.error(error_msg)
-        raise KeyError(error_msg)
+
     return homeworks
 
 
 def parse_status(homework):
     """Получаем статус домашней работы."""
-    logger.info(f'{parse_status.__name__} начинает работу')
+    logger.info('Получаем статус')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_name is None:
         error_msg = ('В словаре отсутсвует имя домашней работы.\n'
                      f'Словарь - {homework}')
-        logger.error(error_msg)
         raise KeyError(error_msg)
     if homework_status not in HOMEWORK_STATUSES:
         error_msg = (f'Неизвестный статус домашней работы - {homework_status}')
-        logger.error(error_msg)
         raise KeyError(error_msg)
 
     verdict = HOMEWORK_STATUSES[homework_status]
@@ -144,7 +128,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяем обязательные токены."""
-    logger.info(f'{check_tokens.__name__} начинает работу')
+    logger.info('Проверка токенов')
     no_token_msg = 'Отсутствует обязательная переменная окружения: '
     flag = True
     if PRACTICUM_TOKEN is None:
@@ -162,7 +146,7 @@ def check_tokens():
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        raise exceptions.MandatoryTokenError()
+        sys.exit('Отсутсвует обязательная переменная окружения')
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     previous_homework = ''
@@ -187,7 +171,24 @@ def main():
                 previous_status = homework.get('status')
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
-
+        except TelegramError as tg_error:
+            logger.error(f'Сообщнеие не отправлено: {tg_error}')
+            previous_error = str(tg_error)
+        except exceptions.RequestExceptionError as error:
+            logger.error(f'Сервер недоступен: {error}')
+            if str(error) != previous_error:
+                send_message(bot, str(error))
+                previous_error = str(error)
+        except TypeError as error:
+            logger.error(f'response должен быть словарём: {error}')
+            if str(error) != previous_error:
+                send_message(bot, str(error))
+                previous_error = str(error)
+        except KeyError as error:
+            logger.error(f'Отсутствует обязательный ключ: {error}')
+            if str(error) != previous_error:
+                send_message(bot, str(error))
+                previous_error = str(error)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             if str(error) != previous_error:
