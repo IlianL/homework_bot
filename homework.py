@@ -55,7 +55,8 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except TelegramError as tg_error:
-        raise tg_error()
+        error_msg = f'Ошибка отправления сообщения {tg_error}'
+        raise exceptions.TelegramSendMessageError(error_msg)
     else:
         logger.info(f'Успешно отправили сообщение {message}')
 
@@ -82,7 +83,10 @@ def get_api_answer(current_timestamp):
         response = response.json()
         return response
     except Exception as error:
-        raise exceptions.RequestExceptionError(error)
+        error_msg = (f'Ошибка {error}.\n'
+                     f'Статус ответа: {response.status_code}.\n'
+                     f'Параметры запроса: {requests_params}.\n')
+        raise exceptions.RequestExceptionError(error_msg)
 
 
 def check_response(response):
@@ -104,7 +108,7 @@ def check_response(response):
     if not isinstance(homeworks, list):
         error_msg = (f'Домашние работы должны быть списком, '
                      f'сейчас - {type(homeworks)}')
-        raise KeyError(error_msg)
+        raise TypeError(error_msg)
 
     return homeworks
 
@@ -146,7 +150,9 @@ def check_tokens():
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        sys.exit('Отсутсвует обязательная переменная окружения')
+        sys.exit('Отсутсвуют обязательные переменные окружения.\n'
+                 'Проверь .env на начилие: '
+                 'PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID')
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     previous_homework = ''
@@ -170,8 +176,7 @@ def main():
                 previous_homework = homework.get('homework_name')
                 previous_status = homework.get('status')
             current_timestamp = int(time.time())
-            time.sleep(RETRY_TIME)
-        except TelegramError as tg_error:
+        except exceptions.TelegramSendMessageError as tg_error:
             logger.error(f'Сообщнеие не отправлено: {tg_error}')
             previous_error = str(tg_error)
         except Exception as error:

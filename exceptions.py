@@ -31,3 +31,8 @@ class RequestIsNotDictionaryError(Exception):
 class MandatoryTokenError(Exception):
     """Обязательные переменные окружения не были введены."""
     pass
+
+
+class TelegramSendMessageError(Exception):
+    """Обязательные переменные окружения не были введены."""
+    pass
