@@ -174,22 +174,8 @@ def main():
         except TelegramError as tg_error:
             logger.error(f'Сообщнеие не отправлено: {tg_error}')
             previous_error = str(tg_error)
-        except exceptions.RequestExceptionError as error:
-            logger.error(f'Сервер недоступен: {error}')
-            if str(error) != previous_error:
-                send_message(bot, str(error))
-                previous_error = str(error)
-        except TypeError as error:
-            logger.error(f'response должен быть словарём: {error}')
-            if str(error) != previous_error:
-                send_message(bot, str(error))
-                previous_error = str(error)
-        except KeyError as error:
-            logger.error(f'Отсутствует обязательный ключ: {error}')
-            if str(error) != previous_error:
-                send_message(bot, str(error))
-                previous_error = str(error)
         except Exception as error:
+            logger.error(f'Сбой в работе программы: {error}')
             message = f'Сбой в работе программы: {error}'
             if str(error) != previous_error:
                 send_message(bot, message)
