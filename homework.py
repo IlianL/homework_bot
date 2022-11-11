@@ -154,7 +154,8 @@ def main():
                  'Проверь .env на начилие: '
                  'PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID')
     bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time())
+    #current_timestamp = int(time.time())
+    current_timestamp = 1665471713
     previous_homework = ''
     previous_status = ''
     previous_error = ''
@@ -175,7 +176,8 @@ def main():
                 send_message(bot, message)
                 previous_homework = homework.get('homework_name')
                 previous_status = homework.get('status')
-            current_timestamp = int(time.time())
+            #current_timestamp = int(time.time())
+            current_timestamp = 1665471713
         except exceptions.TelegramSendMessageError as tg_error:
             logger.error(f'Сообщнеие не отправлено: {tg_error}')
             previous_error = str(tg_error)
